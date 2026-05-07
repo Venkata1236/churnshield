@@ -4,7 +4,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
-from app.database.models import ChurnPrediction, RetentionRecord
+from app.database.models import ChurnPrediction, RetentionResult
 from app.graph.pipeline import retention_pipeline
 from app.models.schemas import RetentionResponse, OfferDetails
 
@@ -73,7 +73,7 @@ async def get_retention_strategy(
     # Step 5 — Save retention record to DB
     try:
         offer = final_state.get("offer_details", {})
-        record = RetentionRecord(
+        record = RetentionResult(
             customer_id=customer_id,
             risk_tier=final_state["risk_tier"],
             retention_strategy=final_state["retention_strategy"],
@@ -116,9 +116,9 @@ async def get_saved_retention(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(RetentionRecord)
-        .where(RetentionRecord.customer_id == customer_id)
-        .order_by(desc(RetentionRecord.created_at))
+        select(RetentionResult)
+        .where(RetentionResult.customer_id == customer_id)
+        .order_by(desc(RetentionResult.created_at))
         .limit(1)
     )
     record = result.scalar_one_or_none()
