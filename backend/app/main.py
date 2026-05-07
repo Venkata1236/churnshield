@@ -49,8 +49,8 @@ async def lifespan(app: FastAPI):
 # ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
     description="Customer churn prediction and retention strategy API for telecom",
     docs_url="/docs",
     redoc_url="/redoc",

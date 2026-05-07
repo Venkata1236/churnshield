@@ -22,8 +22,8 @@ class ModelManager:
         self.is_loaded = False
 
     def load(self) -> None:
-        model_path = Path(settings.model_path)
-        feature_path = Path(settings.feature_names_path)
+        model_path = Path(settings.MODEL_PATH)
+        feature_path = Path(settings.FEATURE_NAMES_PATH)
 
         if not model_path.exists():
             logger.warning(f"Model not found at {model_path} — train first")
