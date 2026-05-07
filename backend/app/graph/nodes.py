@@ -10,7 +10,7 @@ from app.graph.state import ChurnState
 # ── LLM Setup ─────────────────────────────────────────────────────────────────
 
 llm = ChatOpenAI(
-    model="gpt-3.5-turbo",
+    model="gpt-4o-mini",
     api_key=settings.openai_api_key,
     temperature=0.3,
     model_kwargs={"response_format": {"type": "json_object"}},
