@@ -1,67 +1,43 @@
-from functools import lru_cache
-from pathlib import Path
-
 import os
 from pathlib import Path
-from pydantic_settings import BaseSettings
-from loguru import logger
+from typing import List, Optional
 
-from pydantic import Field
+from loguru import logger
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 SAVED_MODELS_DIR = BASE_DIR / "saved_models"
 
 
 class Settings(BaseSettings):
+    APP_NAME: str = "ChurnShield API"
+    APP_VERSION: str = "0.1.0"
+    ENVIRONMENT: str = "development"
+
+    OPENAI_API_KEY: str = ""
+    DATABASE_URL: Optional[str] = None
+
+    MODEL_PATH: str = str(SAVED_MODELS_DIR / "churn_model.pkl")
+    FEATURE_NAMES_PATH: str = str(SAVED_MODELS_DIR / "feature_names.json")
+
+    LANGCHAIN_API_KEY: str = ""
+    LANGCHAIN_TRACING_V2: str = "false"
+    LANGCHAIN_PROJECT: str = "churnshield"
+
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
     model_config = SettingsConfigDict(
-        env_file=BASE_DIR / ".env",
+        env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False,
         extra="ignore",
     )
 
-    # App
-    app_name: str = "ChurnShield API"
-    app_version: str = "0.1.0"
-    environment: str = Field(default="development", alias="ENVIRONMENT")
-    api_prefix: str = "/api/v1"
 
-    # OpenAI
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+settings = Settings()
 
-    # Database
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    if not DATABASE_URL:
-        logger.warning("No DATABASE_URL — running DB-less mode (local dev)")
-        DATABASE_URL = None  # Skip DB dependency
-
-    # ML
-    model_path: str = Field(
-        default=str(SAVED_MODELS_DIR / "churn_model.pkl"),
-        alias="MODEL_PATH",
-    )
-    feature_names_path: str = Field(
-        default=str(SAVED_MODELS_DIR / "feature_names.json"),
-        alias="FEATURE_NAMES_PATH",
-    )
-
-    # LangSmith
-    langchain_api_key: str = Field(default="", alias="LANGCHAIN_API_KEY")
-    langchain_tracing_v2: bool = Field(default=False, alias="LANGCHAIN_TRACING_V2")
-    langchain_project: str = Field(default="churnshield", alias="LANGCHAIN_PROJECT")
-
-    # CORS
-    cors_origins: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://churnshield.vercel.app",
-    ]
-
-
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
-
-
-settings = get_settings()
+if not settings.DATABASE_URL:
+    logger.warning("No DATABASE_URL — running DB-less mode (local dev)")
