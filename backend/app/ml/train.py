@@ -11,11 +11,14 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 
-from app.core.config import SAVED_MODELS_DIR, BASE_DIR
+from pathlib import Path
+
+from app.core.config import SAVED_MODELS_DIR
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-DATA_PATH = BASE_DIR / "data" / "WA_Fn-UseC_-Telco-Customer-Churn.csv"
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+DATA_PATH = BACKEND_DIR / "data" / "WA_Fn-UseC_-Telco-Customer-Churn.csv"
 
 
 # ── Step 1: Load & Clean ──────────────────────────────────────────────────────
