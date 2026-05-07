@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
 # ── Engine ────────────────────────────────────────────────────────────────────
 
 engine = create_async_engine(
-    settings.database_url,
+    settings.DATABASE_URL,
     echo=settings.environment == "development",
     pool_size=5,
     max_overflow=10,
