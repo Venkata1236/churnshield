@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: churnshield-config
+data:
+  ENVIRONMENT: "development"
+  MODEL_PATH: "saved_models/churn_model.pkl"
+  FEATURE_NAMES_PATH: "saved_models/feature_names.json"
+  LANGCHAIN_TRACING_V2: "true"
+  LANGCHAIN_PROJECT: "churnshield"
