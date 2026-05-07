@@ -149,7 +149,7 @@ def tune_xgboost(X: np.ndarray, y: np.ndarray) -> dict:
         }
         model = XGBClassifier(**params)
         cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-        scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=-1)
+        scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=1)
         return scores.mean()
 
     study = optuna.create_study(direction="maximize")
@@ -179,7 +179,7 @@ def train(data_path: Path = DATA_PATH) -> None:
         scale_pos_weight=scale_pos_weight,
         eval_metric="auc",
         random_state=42,
-        n_jobs=-1,
+        n_jobs=1,
     )
     model.fit(X, y)
 
