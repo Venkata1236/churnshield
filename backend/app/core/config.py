@@ -1,6 +1,11 @@
 from functools import lru_cache
 from pathlib import Path
 
+import os
+from pathlib import Path
+from pydantic_settings import BaseSettings
+from loguru import logger
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,7 +31,10 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
 
     # Database
-    database_url: str = Field(default="", alias="DATABASE_URL")
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        logger.warning("No DATABASE_URL — running DB-less mode (local dev)")
+        DATABASE_URL = None  # Skip DB dependency
 
     # ML
     model_path: str = Field(
