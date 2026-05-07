@@ -36,3 +36,9 @@ httpx
 
 # Utils
 python-dotenv
+
+# Notebook extras
+matplotlib
+seaborn
+jupyter
+ipywidgets
