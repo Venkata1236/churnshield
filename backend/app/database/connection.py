@@ -1,54 +1,53 @@
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from collections.abc import AsyncGenerator
+
+from loguru import logger
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import settings
-from loguru import logger
+from app.database.models import Base
 
 
-# ── Base Class for all DB models ──────────────────────────────────────────────
+engine = None
+AsyncSessionLocal = None
 
-class Base(DeclarativeBase):
-    pass
+if settings.DATABASE_URL:
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=settings.ENVIRONMENT == "development",
+        future=True,
+    )
 
-
-# ── Engine ────────────────────────────────────────────────────────────────────
-
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.environment == "development",
-    pool_size=5,
-    max_overflow=10,
-    pool_pre_ping=True,
-)
-
-
-# ── Session Factory ───────────────────────────────────────────────────────────
-
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-    autocommit=False,
-)
+    AsyncSessionLocal = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+else:
+    logger.warning("Database disabled — running without persistence")
 
 
-# ── Dependency — use in FastAPI routes ────────────────────────────────────────
+async def create_tables() -> None:
+    if engine is None:
+        logger.warning("Skipping table creation — no database configured")
+        return
 
-async def get_db() -> AsyncSession:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    if AsyncSessionLocal is None:
+        raise RuntimeError("Database is not configured")
+
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
-        except Exception as e:
-            await session.rollback()
-            logger.error(f"Database session error: {e}")
+        except Exception as exc:
+            logger.error(f"Database session error: {exc}")
             raise
-
-
-# ── Create all tables on startup ──────────────────────────────────────────────
-
-async def create_tables() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables created successfully")
+        finally:
+            await session.close()
