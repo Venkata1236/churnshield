@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 
 import uvicorn
 from fastapi import FastAPI
@@ -12,12 +13,10 @@ from app.models.schemas import HealthResponse
 from app.routes import predict, retention, history
 
 
-# ── Lifespan ──────────────────────────────────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
 
     # Create DB tables
     try:
@@ -32,12 +31,16 @@ async def lifespan(app: FastAPI):
         logger.error(f"Model load failed: {e}")
 
     # Set LangSmith env vars programmatically
-    import os
-    if settings.langchain_api_key:
-        os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
-        os.environ["LANGCHAIN_TRACING_V2"] = str(settings.langchain_tracing_v2).lower()
-        os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
-        logger.info(f"LangSmith tracing enabled — project: {settings.langchain_project}")
+    try:
+        if settings.LANGCHAIN_API_KEY:
+            os.environ["LANGCHAIN_API_KEY"] = settings.LANGCHAIN_API_KEY
+            os.environ["LANGCHAIN_TRACING_V2"] = str(settings.LANGCHAIN_TRACING_V2).lower()
+            os.environ["LANGCHAIN_PROJECT"] = settings.LANGCHAIN_PROJECT
+            logger.info(
+                f"LangSmith tracing enabled — project: {settings.LANGCHAIN_PROJECT}"
+            )
+    except Exception as e:
+        logger.error(f"LangSmith setup failed: {e}")
 
     logger.info("ChurnShield API ready")
     yield
@@ -45,8 +48,6 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("ChurnShield API shutting down")
 
-
-# ── App ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -57,9 +58,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-# ── CORS ──────────────────────────────────────────────────────────────────────
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -68,22 +66,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ── Routers ───────────────────────────────────────────────────────────────────
-
 app.include_router(predict.router)
 app.include_router(retention.router)
 app.include_router(history.router)
 
 
-# ── Health ────────────────────────────────────────────────────────────────────
-
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health():
     return HealthResponse(
         status="ok",
-        version=settings.app_version,
-        environment=settings.environment,
+        version=settings.APP_VERSION,
+        environment=settings.ENVIRONMENT,
         model_loaded=model_manager.is_loaded,
     )
 
@@ -91,14 +84,12 @@ async def health():
 @app.get("/", tags=["Health"])
 async def root():
     return {
-        "name": settings.app_name,
-        "version": settings.app_version,
+        "name": settings.APP_NAME,
+        "version": settings.APP_VERSION,
         "docs": "/docs",
         "health": "/health",
     }
 
-
-# ── Entry Point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     uvicorn.run(
