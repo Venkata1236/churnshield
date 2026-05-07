@@ -4,7 +4,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
-from app.database.models import ChurnPrediction, RetentionRecord
+from app.database.models import ChurnPrediction, RetentionResult
 from app.models.schemas import HistoryRecord, OutcomeUpdate, OutcomeStatus
 
 router = APIRouter(prefix="/api/v1", tags=["History"])
@@ -85,9 +85,9 @@ async def update_outcome(
 ):
     # Get latest retention record for this customer
     result = await db.execute(
-        select(RetentionRecord)
-        .where(RetentionRecord.customer_id == customer_id)
-        .order_by(desc(RetentionRecord.created_at))
+        select(RetentionResult)
+        .where(RetentionResult.customer_id == customer_id)
+        .order_by(desc(RetentionResult.created_at))
         .limit(1)
     )
     retention = result.scalar_one_or_none()
