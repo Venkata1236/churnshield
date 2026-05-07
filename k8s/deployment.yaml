@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churnshield-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: churnshield-api
+  template:
+    metadata:
+      labels:
+        app: churnshield-api
+    spec:
+      containers:
+        - name: churnshield-api
+          image: churnshield-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 7860
+          envFrom:
+            - configMapRef:
+                name: churnshield-config
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: churnshield-secrets
+                  key: OPENAI_API_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: churnshield-secrets
+                  key: DATABASE_URL
+            - name: LANGCHAIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: churnshield-secrets
+                  key: LANGCHAIN_API_KEY
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
