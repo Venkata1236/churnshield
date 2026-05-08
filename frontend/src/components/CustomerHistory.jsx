@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronUp, ChevronDown } from 'lucide-react'
+import { ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
+import { updateOutcome } from '../services/api'
 
 const TIER_STYLES = {
   HIGH: 'bg-red-100 text-red-700',
@@ -9,19 +10,39 @@ const TIER_STYLES = {
 }
 
 const OUTCOME_STYLES = {
-  PENDING: 'bg-gray-100 text-gray-500',
-  SAVED: 'bg-green-100 text-green-700',
-  CHURNED: 'bg-red-100 text-red-700',
+  PENDING: 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+  SAVED: 'bg-green-100 text-green-700 hover:bg-green-200',
+  CHURNED: 'bg-red-100 text-red-700 hover:bg-red-200',
 }
 
 export default function CustomerHistory({ records = [] }) {
   const [filter, setFilter] = useState('ALL')
   const [sortDir, setSortDir] = useState('desc')
   const [outcomes, setOutcomes] = useState({})
+  const [savingId, setSavingId] = useState(null)
 
-  const toggleOutcome = (id, current) => {
+  const getNextOutcome = (current) => {
     const cycle = { PENDING: 'SAVED', SAVED: 'CHURNED', CHURNED: 'PENDING' }
-    setOutcomes((prev) => ({ ...prev, [id]: cycle[current] }))
+    return cycle[current] || 'PENDING'
+  }
+
+  const handleOutcomeChange = async (record) => {
+    const current = outcomes[record.id] || record.outcome || 'PENDING'
+    const next = getNextOutcome(current)
+
+    try {
+      setSavingId(record.id)
+      const updated = await updateOutcome(record.customer_id, next)
+      setOutcomes((prev) => ({
+        ...prev,
+        [record.id]: updated.outcome,
+      }))
+    } catch (error) {
+      console.error('Failed to update outcome:', error)
+      alert('Failed to update outcome')
+    } finally {
+      setSavingId(null)
+    }
   }
 
   const filtered = records
@@ -33,7 +54,6 @@ export default function CustomerHistory({ records = [] }) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <h3 className="font-semibold text-gray-800">Prediction History</h3>
         <div className="flex gap-2">
@@ -53,7 +73,6 @@ export default function CustomerHistory({ records = [] }) {
         </div>
       </div>
 
-      {/* Table */}
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-400 text-sm">
           No predictions found
@@ -92,6 +111,8 @@ export default function CustomerHistory({ records = [] }) {
             <tbody className="divide-y divide-gray-50">
               {filtered.map((r) => {
                 const outcome = outcomes[r.id] || r.outcome || 'PENDING'
+                const isSaving = savingId === r.id
+
                 return (
                   <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
@@ -105,7 +126,11 @@ export default function CustomerHistory({ records = [] }) {
                       {r.customer_id}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${TIER_STYLES[r.risk_tier] || TIER_STYLES.PENDING}`}>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                          TIER_STYLES[r.risk_tier] || TIER_STYLES.PENDING
+                        }`}
+                      >
                         {r.risk_tier}
                       </span>
                     </td>
@@ -127,9 +152,13 @@ export default function CustomerHistory({ records = [] }) {
                     </td>
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => toggleOutcome(r.id, outcome)}
-                        className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${OUTCOME_STYLES[outcome]}`}
+                        onClick={() => handleOutcomeChange(r)}
+                        disabled={isSaving}
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${
+                          OUTCOME_STYLES[outcome]
+                        } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
                       >
+                        {isSaving && <Loader2 size={12} className="animate-spin" />}
                         {outcome}
                       </button>
                     </td>
