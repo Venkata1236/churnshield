@@ -18,7 +18,7 @@ async def get_retention_strategy(
     customer_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    # Step 1 — Fetch latest prediction from DB
+    # Step 1 – Fetch latest prediction from DB
     result = await db.execute(
         select(ChurnPrediction)
         .where(ChurnPrediction.customer_id == customer_id)
@@ -38,10 +38,9 @@ async def get_retention_strategy(
         f"(tier={prediction.risk_tier}, prob={prediction.churn_probability:.3f})"
     )
 
-    # Step 2 — Build initial LangGraph state
+    # Step 2 – Build initial LangGraph state (no customer_data — not in model)
     initial_state = {
         "customer_id": customer_id,
-        "customer_data": prediction.customer_data or {},
         "churn_probability": prediction.churn_probability,
         "risk_tier": prediction.risk_tier,
         "top_churn_drivers": prediction.top_churn_drivers or [],
@@ -53,7 +52,7 @@ async def get_retention_strategy(
         "langsmith_trace_url": None,
     }
 
-    # Step 3 — Run LangGraph pipeline
+    # Step 3 – Run LangGraph pipeline
     try:
         final_state = await retention_pipeline.ainvoke(initial_state)
     except Exception as e:
@@ -63,14 +62,14 @@ async def get_retention_strategy(
             detail=f"Retention pipeline failed: {str(e)}",
         )
 
-    # Step 4 — Build LangSmith trace URL
+    # Step 4 – Build LangSmith trace URL
     langsmith_url = (
-        f"https://smith.langchain.com/projects/{{}}/runs"
-        if final_state.get("langsmith_trace_url") is None
-        else final_state["langsmith_trace_url"]
+        final_state["langsmith_trace_url"]
+        if final_state.get("langsmith_trace_url")
+        else None
     )
 
-    # Step 5 — Save retention record to DB
+    # Step 5 – Save retention record to DB
     try:
         offer = final_state.get("offer_details", {})
         record = RetentionResult(
@@ -81,15 +80,16 @@ async def get_retention_strategy(
             message_draft=final_state.get("message_draft", ""),
             estimated_save_probability=final_state.get("estimated_save_probability", 0.0),
             langsmith_trace_url=langsmith_url,
-            outcome="PENDING",
         )
         db.add(record)
-        await db.flush()
+        await db.commit()
+        await db.refresh(record)
         logger.info(f"Retention record saved for {customer_id}")
     except Exception as e:
+        await db.rollback()
         logger.error(f"DB save failed for retention record {customer_id}: {e}")
 
-    # Step 6 — Return structured response
+    # Step 6 – Return structured response
     offer_data = final_state.get("offer_details", {})
 
     return RetentionResponse(
