@@ -5,6 +5,7 @@ const TIER_STYLES = {
   HIGH: 'bg-red-100 text-red-700',
   MEDIUM: 'bg-yellow-100 text-yellow-700',
   LOW: 'bg-green-100 text-green-700',
+  PENDING: 'bg-gray-100 text-gray-500',
 }
 
 const OUTCOME_STYLES = {
@@ -94,7 +95,7 @@ export default function CustomerHistory({ records = [] }) {
                 return (
                   <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                      {new Date(r.predicted_at || r.created_at).toLocaleDateString('en-IN', {
+                      {new Date(r.predicted_at).toLocaleDateString('en-IN', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric',
@@ -104,7 +105,7 @@ export default function CustomerHistory({ records = [] }) {
                       {r.customer_id}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${TIER_STYLES[r.risk_tier] || TIER_STYLES.LOW}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${TIER_STYLES[r.risk_tier] || TIER_STYLES.PENDING}`}>
                         {r.risk_tier}
                       </span>
                     </td>
