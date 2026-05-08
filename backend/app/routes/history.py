@@ -39,13 +39,6 @@ async def get_history(
     history = []
     for r in records:
         retention = await _get_latest_retention(db, r.customer_id)
-
-        outcome_value = retention.outcome if retention and retention.outcome else OutcomeStatus.PENDING.value
-        try:
-            outcome = OutcomeStatus(outcome_value)
-        except ValueError:
-            outcome = OutcomeStatus.PENDING
-
         history.append(
             HistoryRecord(
                 id=r.id,
@@ -53,7 +46,7 @@ async def get_history(
                 churn_probability=r.churn_probability,
                 risk_tier=r.risk_tier,
                 retention_strategy=retention.retention_strategy if retention else None,
-                outcome=outcome,
+                outcome=OutcomeStatus.PENDING,
                 predicted_at=r.predicted_at,
             )
         )
@@ -83,19 +76,13 @@ async def get_customer_history(
 
     retention = await _get_latest_retention(db, customer_id)
 
-    outcome_value = retention.outcome if retention and retention.outcome else OutcomeStatus.PENDING.value
-    try:
-        outcome = OutcomeStatus(outcome_value)
-    except ValueError:
-        outcome = OutcomeStatus.PENDING
-
     return HistoryRecord(
         id=record.id,
         customer_id=record.customer_id,
         churn_probability=record.churn_probability,
         risk_tier=record.risk_tier,
         retention_strategy=retention.retention_strategy if retention else None,
-        outcome=outcome,
+        outcome=OutcomeStatus.PENDING,
         predicted_at=record.predicted_at,
     )
 
@@ -106,23 +93,6 @@ async def update_outcome(
     payload: OutcomeUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(RetentionResult)
-        .where(RetentionResult.customer_id == customer_id)
-        .order_by(desc(RetentionResult.created_at))
-        .limit(1)
-    )
-    retention = result.scalar_one_or_none()
-
-    if not retention:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No retention record found for customer {customer_id}",
-        )
-
-    retention.outcome = payload.outcome.value
-    await db.flush()
-
     pred_result = await db.execute(
         select(ChurnPrediction)
         .where(ChurnPrediction.customer_id == customer_id)
@@ -137,14 +107,18 @@ async def update_outcome(
             detail=f"No churn prediction found for customer {customer_id}",
         )
 
-    logger.info(f"Outcome updated for {customer_id}: {payload.outcome.value}")
+    retention = await _get_latest_retention(db, customer_id)
+
+    logger.warning(
+        f"Outcome update requested for {customer_id}, but outcome is not persisted in database yet"
+    )
 
     return HistoryRecord(
         id=pred.id,
         customer_id=pred.customer_id,
         churn_probability=pred.churn_probability,
         risk_tier=pred.risk_tier,
-        retention_strategy=retention.retention_strategy,
+        retention_strategy=retention.retention_strategy if retention else None,
         outcome=payload.outcome,
         predicted_at=pred.predicted_at,
     )
