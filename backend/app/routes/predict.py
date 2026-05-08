@@ -29,7 +29,6 @@ async def predict_churn(
         logger.error(f"Prediction error for {payload.customer_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-    # Save to Supabase
     try:
         record = ChurnPrediction(
             customer_id=result["customer_id"],
@@ -38,14 +37,14 @@ async def predict_churn(
             risk_tier=result["risk_tier"].value,
             top_churn_drivers=result["top_churn_drivers"],
             retention_signals=result["retention_signals"],
-            customer_data=payload.model_dump(),
         )
         db.add(record)
-        await db.flush()
+        await db.commit()
+        await db.refresh(record)
         logger.info(f"Prediction saved to DB for customer: {payload.customer_id}")
     except Exception as e:
+        await db.rollback()
         logger.error(f"DB save failed for {payload.customer_id}: {e}")
-        # Don't fail the response — DB error shouldn't block prediction
 
     return ChurnPredictionResponse(**result)
 
