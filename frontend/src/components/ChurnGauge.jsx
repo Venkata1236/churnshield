@@ -12,6 +12,15 @@ const RISK_LABELS = {
   HIGH: 'High Risk',
 }
 
+function describeArc(cx, cy, r, startAngle, endAngle) {
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const x1 = cx + r * Math.cos(toRad(startAngle))
+  const y1 = cy + r * Math.sin(toRad(startAngle))
+  const x2 = cx + r * Math.cos(toRad(endAngle))
+  const y2 = cy + r * Math.sin(toRad(endAngle))
+  return `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`
+}
+
 export default function ChurnGauge({ probability = 0, riskTier = 'LOW' }) {
   const needleRef = useRef(null)
   const pct = Math.min(Math.max(probability, 0), 1)
@@ -25,15 +34,6 @@ export default function ChurnGauge({ probability = 0, riskTier = 'LOW' }) {
       needleRef.current.style.transform = `rotate(${angle}deg)`
     }
   }, [angle])
-
-  const describeArc = (cx, cy, r, startAngle, endAngle) => {
-    const toRad = (deg) => (deg * Math.PI) / 180
-    const x1 = cx + r * Math.cos(toRad(startAngle))
-    const y1 = cy + r * Math.sin(toRad(startAngle))
-    const x2 = cx + r * Math.cos(toRad(endAngle))
-    const y2 = cy + r * Math.sin(toRad(endAngle))
-    return `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`
-  }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -77,7 +77,7 @@ export default function ChurnGauge({ probability = 0, riskTier = 'LOW' }) {
             ref={needleRef}
             style={{ transformOrigin: '110px 110px', transform: 'rotate(-90deg)' }}
           >
-            e
+            <line
               x1="110"
               y1="110"
               x2="110"
@@ -86,12 +86,18 @@ export default function ChurnGauge({ probability = 0, riskTier = 'LOW' }) {
               strokeWidth="3"
               strokeLinecap="round"
             />
-            ircle cx="110" cy="110" r="7" fill="#0f172a" />
+            <circle cx="110" cy="110" r="7" fill="#0f172a" />
           </g>
 
-          <text x="22" y="118" fontSize="9" fill="#16a34a" fontWeight="600">LOW</text>
-          <text x="102" y="20" fontSize="9" fill="#f59e0b" fontWeight="600">MED</text>
-          <text x="182" y="118" fontSize="9" fill="#ef4444" fontWeight="600">HIGH</text>
+          <text x="22" y="118" fontSize="9" fill="#16a34a" fontWeight="600">
+            LOW
+          </text>
+          <text x="102" y="20" fontSize="9" fill="#f59e0b" fontWeight="600">
+            MED
+          </text>
+          <text x="182" y="118" fontSize="9" fill="#ef4444" fontWeight="600">
+            HIGH
+          </text>
         </svg>
 
         <div className="absolute inset-x-0 bottom-8 flex flex-col items-center">
