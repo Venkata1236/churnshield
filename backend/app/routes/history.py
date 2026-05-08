@@ -10,7 +10,15 @@ from app.models.schemas import HistoryRecord, OutcomeUpdate, OutcomeStatus
 router = APIRouter(prefix="/api/v1", tags=["History"])
 
 
-# ── GET /history ──────────────────────────────────────────────────────────────
+async def _get_latest_retention(db: AsyncSession, customer_id: str):
+    result = await db.execute(
+        select(RetentionResult)
+        .where(RetentionResult.customer_id == customer_id)
+        .order_by(desc(RetentionResult.created_at))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
 
 @router.get("/history", response_model=list[HistoryRecord])
 async def get_history(
@@ -28,23 +36,31 @@ async def get_history(
     result = await db.execute(query)
     records = result.scalars().all()
 
-    logger.info(f"Fetched {len(records)} history records (tier={risk_tier})")
+    history = []
+    for r in records:
+        retention = await _get_latest_retention(db, r.customer_id)
 
-    return [
-        HistoryRecord(
-            id=r.id,
-            customer_id=r.customer_id,
-            churn_probability=r.churn_probability,
-            risk_tier=r.risk_tier,
-            retention_strategy=_get_retention_strategy(r.customer_id),
-            outcome=OutcomeStatus.PENDING,
-            predicted_at=r.predicted_at,
+        outcome_value = retention.outcome if retention and retention.outcome else OutcomeStatus.PENDING.value
+        try:
+            outcome = OutcomeStatus(outcome_value)
+        except ValueError:
+            outcome = OutcomeStatus.PENDING
+
+        history.append(
+            HistoryRecord(
+                id=r.id,
+                customer_id=r.customer_id,
+                churn_probability=r.churn_probability,
+                risk_tier=r.risk_tier,
+                retention_strategy=retention.retention_strategy if retention else None,
+                outcome=outcome,
+                predicted_at=r.predicted_at,
+            )
         )
-        for r in records
-    ]
 
+    logger.info(f"Fetched {len(history)} history records (tier={risk_tier})")
+    return history
 
-# ── GET /history/{customer_id} ────────────────────────────────────────────────
 
 @router.get("/history/{customer_id}", response_model=HistoryRecord)
 async def get_customer_history(
@@ -65,17 +81,24 @@ async def get_customer_history(
             detail=f"No history found for customer {customer_id}",
         )
 
+    retention = await _get_latest_retention(db, customer_id)
+
+    outcome_value = retention.outcome if retention and retention.outcome else OutcomeStatus.PENDING.value
+    try:
+        outcome = OutcomeStatus(outcome_value)
+    except ValueError:
+        outcome = OutcomeStatus.PENDING
+
     return HistoryRecord(
         id=record.id,
         customer_id=record.customer_id,
         churn_probability=record.churn_probability,
         risk_tier=record.risk_tier,
-        outcome=OutcomeStatus.PENDING,
+        retention_strategy=retention.retention_strategy if retention else None,
+        outcome=outcome,
         predicted_at=record.predicted_at,
     )
 
-
-# ── PATCH /history/{customer_id}/outcome ──────────────────────────────────────
 
 @router.patch("/history/{customer_id}/outcome", response_model=HistoryRecord)
 async def update_outcome(
@@ -83,7 +106,6 @@ async def update_outcome(
     payload: OutcomeUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    # Get latest retention record for this customer
     result = await db.execute(
         select(RetentionResult)
         .where(RetentionResult.customer_id == customer_id)
@@ -100,9 +122,7 @@ async def update_outcome(
 
     retention.outcome = payload.outcome.value
     await db.flush()
-    logger.info(f"Outcome updated for {customer_id}: {payload.outcome.value}")
 
-    # Fetch churn prediction for response
     pred_result = await db.execute(
         select(ChurnPrediction)
         .where(ChurnPrediction.customer_id == customer_id)
@@ -110,6 +130,14 @@ async def update_outcome(
         .limit(1)
     )
     pred = pred_result.scalar_one_or_none()
+
+    if not pred:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No churn prediction found for customer {customer_id}",
+        )
+
+    logger.info(f"Outcome updated for {customer_id}: {payload.outcome.value}")
 
     return HistoryRecord(
         id=pred.id,
@@ -121,8 +149,6 @@ async def update_outcome(
         predicted_at=pred.predicted_at,
     )
 
-
-# ── DELETE /history/{customer_id} ─────────────────────────────────────────────
 
 @router.delete("/history/{customer_id}")
 async def delete_history(
@@ -147,10 +173,3 @@ async def delete_history(
     await db.flush()
     logger.info(f"Deleted {len(records)} records for customer {customer_id}")
     return {"message": f"Deleted {len(records)} records for {customer_id}"}
-
-
-# ── Helper ────────────────────────────────────────────────────────────────────
-
-def _get_retention_strategy(customer_id: str) -> str | None:
-    """Placeholder — retention strategy fetched separately via /retention-strategy."""
-    return None
