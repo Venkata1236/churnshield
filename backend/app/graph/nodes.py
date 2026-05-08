@@ -29,19 +29,13 @@ def _format_drivers(drivers: list) -> str:
 # ── Node 1: RiskRouter ────────────────────────────────────────────────────────
 
 def risk_router(state: ChurnState) -> ChurnState:
-    """
-    Routes to STANDARD / TARGETED / ESCALATE based on risk tier.
-    No LLM needed — pure conditional logic.
-    """
     tier = state["risk_tier"]
-
     if tier == "HIGH":
         strategy = "ESCALATE"
     elif tier == "MEDIUM":
         strategy = "TARGETED"
     else:
         strategy = "STANDARD"
-
     logger.info(f"RiskRouter: {state['customer_id']} → {strategy}")
     return {"retention_strategy": strategy}
 
@@ -49,18 +43,12 @@ def risk_router(state: ChurnState) -> ChurnState:
 # ── Node 2: StandardOfferNode ─────────────────────────────────────────────────
 
 def standard_offer_node(state: ChurnState) -> ChurnState:
-    """
-    LOW risk customers.
-    Rule-based — no LLM needed.
-    Loyalty points + small discount to reward staying.
-    """
     offer = {
         "offer_type": "Loyalty Reward",
         "discount_pct": 10,
         "validity_days": 30,
         "conditions": "Applicable on next billing cycle. Cannot be combined with other offers.",
     }
-
     logger.info(f"StandardOfferNode: loyalty offer for {state['customer_id']}")
     return {
         "offer_details": offer,
@@ -71,38 +59,25 @@ def standard_offer_node(state: ChurnState) -> ChurnState:
 # ── Node 3: TargetedOfferNode ─────────────────────────────────────────────────
 
 def targeted_offer_node(state: ChurnState) -> ChurnState:
-    """
-    MEDIUM risk customers.
-    LLM analyzes top churn drivers and generates a personalized offer
-    that directly addresses the specific reason they might leave.
-    """
     drivers_text = _format_drivers(state["top_churn_drivers"])
-    customer = state["customer_data"]
+    prob = state["churn_probability"]
 
     system_prompt = """You are a telecom retention specialist at Airtel India.
-Your job is to create personalized retention offers that directly address
-why a customer might leave. Always return valid JSON only."""
+Create personalized retention offers that directly address why a customer might leave.
+Always return valid JSON only."""
 
-    user_prompt = f"""Customer Profile:
-- Monthly charges: ₹{customer.get('monthly_charges', 'N/A')}
-- Tenure: {customer.get('tenure', 'N/A')} months
-- Contract: {customer.get('contract', 'N/A')}
-- Internet: {customer.get('internet_service', 'N/A')}
-- Tech support: {customer.get('tech_support', 'N/A')}
-
-Top churn drivers:
+    user_prompt = f"""Top churn drivers:
 {drivers_text}
 
-Churn probability: {state['churn_probability']:.1%}
+Churn probability: {prob:.1%}
 
-Create a targeted retention offer that directly addresses the top churn driver.
-Return JSON with exactly these keys:
+Create a targeted retention offer. Return JSON with exactly these keys:
 {{
-  "offer_type": "string — specific offer name",
-  "discount_pct": integer — 15 to 30,
-  "validity_days": integer — 30 to 90,
-  "conditions": "string — offer conditions",
-  "reasoning": "string — why this offer addresses the churn driver"
+  "offer_type": "string – specific offer name",
+  "discount_pct": integer – 15 to 30,
+  "validity_days": integer – 30 to 90,
+  "conditions": "string – offer conditions",
+  "reasoning": "string – why this offer addresses the churn driver"
 }}"""
 
     response = llm.invoke([
@@ -112,7 +87,7 @@ Return JSON with exactly these keys:
 
     offer = json.loads(response.content)
     reasoning = offer.pop("reasoning", "")
-    logger.info(f"TargetedOfferNode: {state['customer_id']} — {offer['offer_type']} | {reasoning}")
+    logger.info(f"TargetedOfferNode: {state['customer_id']} – {offer['offer_type']} | {reasoning}")
 
     return {
         "offer_details": offer,
@@ -123,40 +98,27 @@ Return JSON with exactly these keys:
 # ── Node 4: EscalateNode ──────────────────────────────────────────────────────
 
 def escalate_node(state: ChurnState) -> ChurnState:
-    """
-    HIGH risk customers.
-    LLM generates escalation brief for senior retention specialist
-    + AI-drafted conversation opening for the call.
-    """
     drivers_text = _format_drivers(state["top_churn_drivers"])
-    customer = state["customer_data"]
+    prob = state["churn_probability"]
 
     system_prompt = """You are a senior retention manager at Airtel India.
-You prepare escalation briefs for your retention specialists before
-they call high-risk customers. Always return valid JSON only."""
+Prepare escalation briefs for retention specialists before high-risk customer calls.
+Always return valid JSON only."""
 
-    user_prompt = f"""High-Risk Customer — Escalation Brief
-
-Customer Profile:
-- Monthly charges: ₹{customer.get('monthly_charges', 'N/A')}
-- Tenure: {customer.get('tenure', 'N/A')} months
-- Contract: {customer.get('contract', 'N/A')}
-- Internet: {customer.get('internet_service', 'N/A')}
-- Tech support: {customer.get('tech_support', 'N/A')}
-- Senior citizen: {customer.get('senior_citizen', 0)}
+    user_prompt = f"""High-Risk Customer – Escalation Brief
 
 Top churn drivers:
 {drivers_text}
 
-Churn probability: {state['churn_probability']:.1%} — CRITICAL
+Churn probability: {prob:.1%} – CRITICAL
 
 Generate an escalation package. Return JSON with exactly these keys:
 {{
-  "offer_type": "string — premium retention offer name",
-  "discount_pct": integer — 25 to 40,
-  "validity_days": integer — 60 to 90,
-  "conditions": "string — offer conditions",
-  "escalation_brief": "string — 2-3 sentence brief for the specialist",
+  "offer_type": "string – premium retention offer name",
+  "discount_pct": integer – 25 to 40,
+  "validity_days": integer – 60 to 90,
+  "conditions": "string – offer conditions",
+  "escalation_brief": "string – 2-3 sentence brief for the specialist",
   "urgency": "CRITICAL"
 }}"""
 
@@ -166,7 +128,7 @@ Generate an escalation package. Return JSON with exactly these keys:
     ])
 
     offer = json.loads(response.content)
-    logger.info(f"EscalateNode: {state['customer_id']} — CRITICAL escalation prepared")
+    logger.info(f"EscalateNode: {state['customer_id']} – CRITICAL escalation prepared")
 
     return {
         "offer_details": offer,
@@ -177,13 +139,8 @@ Generate an escalation package. Return JSON with exactly these keys:
 # ── Node 5: MessageDrafter ────────────────────────────────────────────────────
 
 def message_drafter_node(state: ChurnState) -> ChurnState:
-    """
-    Runs for ALL tiers after offer is determined.
-    LLM writes the actual customer-facing message or agent talking points.
-    """
     strategy = state["retention_strategy"]
     offer = state["offer_details"]
-    customer = state["customer_data"]
     drivers_text = _format_drivers(state["top_churn_drivers"])
 
     if strategy == "STANDARD":
@@ -192,12 +149,11 @@ Write warm, brief customer messages. Return valid JSON only."""
 
         user_prompt = f"""Write a friendly SMS/WhatsApp message for a loyal customer.
 
-Offer: {offer['offer_type']} — {offer['discount_pct']}% off for {offer['validity_days']} days
-Tenure: {customer.get('tenure', 'N/A')} months with us
+Offer: {offer['offer_type']} – {offer['discount_pct']}% off for {offer['validity_days']} days
 
 Return JSON:
 {{
-  "message_draft": "string — friendly 2-3 sentence customer message"
+  "message_draft": "string – friendly 2-3 sentence customer message"
 }}"""
 
     elif strategy == "TARGETED":
@@ -209,12 +165,12 @@ Write persuasive but honest retention messages. Return valid JSON only."""
 Why they might leave:
 {drivers_text}
 
-Offer prepared: {offer['offer_type']} — {offer['discount_pct']}% off
+Offer prepared: {offer['offer_type']} – {offer['discount_pct']}% off
 Validity: {offer['validity_days']} days
 
 Return JSON:
 {{
-  "message_draft": "string — personalized 3-4 sentence message addressing their specific concern"
+  "message_draft": "string – personalized 3-4 sentence message addressing their specific concern"
 }}"""
 
     else:  # ESCALATE
@@ -224,11 +180,11 @@ Write professional call scripts for high-risk customer calls. Return valid JSON 
         user_prompt = f"""Write a call opening script for a senior specialist calling a high-risk customer.
 
 Escalation brief: {offer.get('escalation_brief', 'High risk customer requiring immediate attention')}
-Premium offer prepared: {offer['offer_type']} — {offer['discount_pct']}% off
+Premium offer prepared: {offer['offer_type']} – {offer['discount_pct']}% off
 
 Return JSON:
 {{
-  "message_draft": "string — professional 3-4 sentence call opening that acknowledges their concerns and leads to the offer"
+  "message_draft": "string – professional 3-4 sentence call opening"
 }}"""
 
     response = llm.invoke([
@@ -238,5 +194,4 @@ Return JSON:
 
     result = json.loads(response.content)
     logger.info(f"MessageDrafter: message drafted for {state['customer_id']} ({strategy})")
-
     return {"message_draft": result["message_draft"]}
