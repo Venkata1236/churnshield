@@ -22,6 +22,13 @@ export const getHistory = async () => {
   return data
 }
 
+export const updateOutcome = async (customerId, outcome) => {
+  const { data } = await api.patch(`/api/v1/history/${customerId}/outcome`, {
+    outcome,
+  })
+  return data
+}
+
 export const getSavedRetention = async (customerId) => {
   const { data } = await api.get(`/api/v1/retention-strategy/${customerId}`)
   return data
