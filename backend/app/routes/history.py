@@ -151,7 +151,8 @@ async def update_outcome(
         )
         db.add(outcome_row)
 
-    await db.flush()
+    await db.commit()  # Add this
+    await db.refresh(outcome_row) # Refresh to get the new state
 
     logger.info(f"Outcome updated for {customer_id}: {payload.outcome.value}")
 
