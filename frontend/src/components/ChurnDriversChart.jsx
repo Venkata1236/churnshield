@@ -9,23 +9,20 @@ import {
 } from 'recharts'
 
 const CustomTooltip = ({ active, payload }) => {
-  if (active && payload && payload.length) {
-    const d = payload[0].payload
-    return (
-      <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-lg max-w-xs">
-        <p className="text-sm font-semibold text-gray-800 mb-1">{d.feature}</p>
-        <p className="text-xs text-gray-500">{d.plain_english}</p>
-        <p className="text-xs mt-1 font-medium" style={{ color: payload[0].fill }}>
-          SHAP: {Math.abs(d.shap_value).toFixed(3)}
-        </p>
-      </div>
-    )
-  }
-  return null
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div className="max-w-xs rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+      <p className="mb-1 text-sm font-semibold text-slate-900">{d.feature}</p>
+      <p className="text-xs text-slate-500">{d.plain_english}</p>
+      <p className="mt-1 text-xs font-medium text-slate-700">
+        SHAP: {Math.abs(d.shap_value).toFixed(3)}
+      </p>
+    </div>
+  )
 }
 
-const shorten = (str) =>
-  str.length > 22 ? str.slice(0, 20) + '…' : str
+const shorten = (str) => (str.length > 18 ? `${str.slice(0, 16)}…` : str)
 
 export default function ChurnDriversChart({ drivers = [], signals = [] }) {
   const driverData = [...drivers]
@@ -39,68 +36,75 @@ export default function ChurnDriversChart({ drivers = [], signals = [] }) {
     .map((s) => ({ ...s, abs: Math.abs(s.shap_value) }))
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-6">
-      <div>
-        <h3 className="font-semibold text-gray-800 mb-1">Why This Customer Might Leave</h3>
-        <p className="text-xs text-gray-400 mb-4">Top churn drivers — higher bar = stronger signal</p>
-
-        {driverData.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">No churn drivers available</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={driverData.length * 48}>
-            <BarChart
-              data={driverData}
-              layout="vertical"
-              margin={{ left: 8, right: 24, top: 0, bottom: 0 }}
-            >
-              <XAxis type="number" hide />
-              <YAxis
-                type="category"
-                dataKey="feature"
-                width={140}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                tickFormatter={shorten}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="abs" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                {driverData.map((_, i) => (
-                  <Cell key={i} fill="#ef4444" fillOpacity={1 - i * 0.12} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-5">
+        <h3 className="text-base font-semibold text-slate-900">Why This Customer Might Leave</h3>
+        <p className="text-xs text-slate-500">Top churn drivers and retention signals</p>
       </div>
 
-      {signalData.length > 0 && (
+      <div className="space-y-6">
         <div>
-          <h3 className="font-semibold text-gray-800 mb-1">Retention Signals</h3>
-          <p className="text-xs text-gray-400 mb-4">Features reducing churn risk</p>
-
-          <ResponsiveContainer width="100%" height={signalData.length * 48}>
-            <BarChart
-              data={signalData}
-              layout="vertical"
-              margin={{ left: 8, right: 24, top: 0, bottom: 0 }}
-            >
-              <XAxis type="number" hide />
-              <YAxis
-                type="category"
-                dataKey="feature"
-                width={140}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-                tickFormatter={shorten}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="abs" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                {signalData.map((_, i) => (
-                  <Cell key={i} fill="#22c55e" fillOpacity={1 - i * 0.15} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Churn Drivers
+          </p>
+          {driverData.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">No churn drivers available</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={driverData.length * 44 + 12}>
+              <BarChart
+                data={driverData}
+                layout="vertical"
+                margin={{ left: 10, right: 24, top: 0, bottom: 0 }}
+              >
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="feature"
+                  width={150}
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  tickFormatter={shorten}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="abs" radius={[0, 6, 6, 0]} maxBarSize={18}>
+                  {driverData.map((_, i) => (
+                    <Cell key={i} fill="#ef4444" fillOpacity={1 - i * 0.1} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
-      )}
+
+        {signalData.length > 0 && (
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Retention Signals
+            </p>
+            <ResponsiveContainer width="100%" height={signalData.length * 44 + 12}>
+              <BarChart
+                data={signalData}
+                layout="vertical"
+                margin={{ left: 10, right: 24, top: 0, bottom: 0 }}
+              >
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="feature"
+                  width={150}
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  tickFormatter={shorten}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="abs" radius={[0, 6, 6, 0]} maxBarSize={18}>
+                  {signalData.map((_, i) => (
+                    <Cell key={i} fill="#22c55e" fillOpacity={1 - i * 0.12} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
