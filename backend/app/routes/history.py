@@ -4,7 +4,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
-from app.database.models import ChurnPrediction, RetentionResult
+from app.database.models import ChurnPrediction, RetentionResult, CustomerOutcome
 from app.models.schemas import HistoryRecord, OutcomeUpdate, OutcomeStatus
 
 router = APIRouter(prefix="/api/v1", tags=["History"])
@@ -15,6 +15,16 @@ async def _get_latest_retention(db: AsyncSession, customer_id: str):
         select(RetentionResult)
         .where(RetentionResult.customer_id == customer_id)
         .order_by(desc(RetentionResult.created_at))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _get_latest_outcome(db: AsyncSession, customer_id: str):
+    result = await db.execute(
+        select(CustomerOutcome)
+        .where(CustomerOutcome.customer_id == customer_id)
+        .order_by(desc(CustomerOutcome.updated_at))
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -39,6 +49,14 @@ async def get_history(
     history = []
     for r in records:
         retention = await _get_latest_retention(db, r.customer_id)
+        outcome_row = await _get_latest_outcome(db, r.customer_id)
+
+        outcome_value = outcome_row.outcome.upper() if outcome_row else OutcomeStatus.PENDING.value
+        try:
+            outcome = OutcomeStatus(outcome_value)
+        except ValueError:
+            outcome = OutcomeStatus.PENDING
+
         history.append(
             HistoryRecord(
                 id=r.id,
@@ -46,7 +64,7 @@ async def get_history(
                 churn_probability=r.churn_probability,
                 risk_tier=r.risk_tier,
                 retention_strategy=retention.retention_strategy if retention else None,
-                outcome=OutcomeStatus.PENDING,
+                outcome=outcome,
                 predicted_at=r.predicted_at,
             )
         )
@@ -75,6 +93,13 @@ async def get_customer_history(
         )
 
     retention = await _get_latest_retention(db, customer_id)
+    outcome_row = await _get_latest_outcome(db, customer_id)
+
+    outcome_value = outcome_row.outcome.upper() if outcome_row else OutcomeStatus.PENDING.value
+    try:
+        outcome = OutcomeStatus(outcome_value)
+    except ValueError:
+        outcome = OutcomeStatus.PENDING
 
     return HistoryRecord(
         id=record.id,
@@ -82,7 +107,7 @@ async def get_customer_history(
         churn_probability=record.churn_probability,
         risk_tier=record.risk_tier,
         retention_strategy=retention.retention_strategy if retention else None,
-        outcome=OutcomeStatus.PENDING,
+        outcome=outcome,
         predicted_at=record.predicted_at,
     )
 
@@ -109,9 +134,26 @@ async def update_outcome(
 
     retention = await _get_latest_retention(db, customer_id)
 
-    logger.warning(
-        f"Outcome update requested for {customer_id}, but outcome is not persisted in database yet"
+    outcome_result = await db.execute(
+        select(CustomerOutcome)
+        .where(CustomerOutcome.customer_id == customer_id)
+        .order_by(desc(CustomerOutcome.updated_at))
+        .limit(1)
     )
+    outcome_row = outcome_result.scalar_one_or_none()
+
+    if outcome_row:
+        outcome_row.outcome = payload.outcome.value
+    else:
+        outcome_row = CustomerOutcome(
+            customer_id=customer_id,
+            outcome=payload.outcome.value,
+        )
+        db.add(outcome_row)
+
+    await db.flush()
+
+    logger.info(f"Outcome updated for {customer_id}: {payload.outcome.value}")
 
     return HistoryRecord(
         id=pred.id,
@@ -144,6 +186,5 @@ async def delete_history(
     for record in records:
         await db.delete(record)
 
-    await db.flush()
     logger.info(f"Deleted {len(records)} records for customer {customer_id}")
     return {"message": f"Deleted {len(records)} records for {customer_id}"}
